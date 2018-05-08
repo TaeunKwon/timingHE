@@ -58,7 +58,7 @@ const int nfiber = 24;
 //bin 2: 7000-11000 fC
 //bin 3: 11000+
 const int nfC = 4;
-const int fCbins[] = {0, 5000, 7000, 11000};
+const int fCbins[] = {0, 5000, 6600, 10600};//{0, 5000, 7000, 11000};
 
 //Store average pedestal for each channel and capacitor
 float peds[nieta][niphi][ndepth][4];
@@ -466,6 +466,7 @@ void makeTimingHistsHE(TString inputDir, TString outputTag, int pedestalRun) {
 
                 //Save to disk (if non-empty)
                 for (int ifC = 0; ifC < nfC; ifC++) {
+                    if(ifC==1 || ifC==3) continue;
                     int nevents_this_chan = h1_energy[ieta][iphi][idepth][ifC]->GetEntries();
                     if (nevents_this_chan > 0) {
                         h1_fC[ieta][iphi][idepth][ifC]->Write();
