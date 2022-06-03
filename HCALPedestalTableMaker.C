@@ -373,13 +373,13 @@ void HCALPedestalTableMakerSubdet(TString rootfile="../../results.root", TString
                 int ieta =  QIE10DigiIEta_->at(i);
                 int iphi =  QIE10DigiIPhi_->at(i);
                 int idepth =  QIE10DigiDepth_->at(i);
-
+          
                 DetId[ieta+41][iphi-1][idepth-1] = QIE10DigiRawID_->at(i);  
                 Subdet[ieta+41][iphi-1][idepth-1] = QIE10DigiSubdet_->at(i);  
 
-                for(unsigned int icap=0; icap<8; icap++)  
+                for(unsigned int icap=0; icap<3; icap++)  
                 { 
-                    h1_ADC[ieta+41][iphi-1][idepth-1][QIE10DigiCapID_->at(i).at(icap)]->Fill(QIE10DigiADC_->at(i).at(icap)); 
+                    h1_ADC[ieta+41][iphi-1][idepth-1][QIE10DigiCapID_->at(i).at(icap)-1]->Fill(QIE10DigiADC_->at(i).at(icap)); 
                 }
             }
         } 

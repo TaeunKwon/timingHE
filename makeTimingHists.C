@@ -58,22 +58,42 @@ const int nfiber = 24;
 //bin 2: 7000-11000 fC
 //bin 3: 11000+
 const int nfC = 4;
-const int fCbins[] = {0, 5000, 6600, 10600};//{0, 5000, 7000, 11000};
+const int fCbins[] = {0, 5000, 7000, 11000};//{0, 5000, 7000, 11000};
 
 //Store average pedestal for each channel and capacitor
 float peds[nieta][niphi][ndepth][4];
+//Pulse shapes
+TH1F *h1_fC[nieta + 2][niphi + 1][ndepth][nfC]; //Hists to store average fC in each time slice
+TH1F *h1_ped[nieta + 2][niphi + 1][ndepth][nfC]; //Hists to store average pedestal in each time slice
+TH1F *h1_energy[nieta + 2][niphi + 1][ndepth][nfC]; //energy distributions (charge distributions)
+TH1F *h1_energyADC[nieta + 2][niphi + 1][ndepth][nfC]; //energy distributions (charge distributions)
+TH1F *h1_chg_time[nieta + 2][niphi + 1][ndepth][nfC]; //Filled with charge-weighted average (uses peak finding)
+TH1F *h1_TDC_time[nieta + 2][niphi + 1][ndepth][nfC]; //in ns
+TH1F *h1_nTDC[nieta + 2][niphi + 1][ndepth][nfC]; //Number of times TDC fires in one digi
+TH1F *h1_chgfracTS2[nieta + 2][niphi + 1][ndepth][nfC];
+TH1F *h1_chgfracTS4[nieta + 2][niphi + 1][ndepth][nfC];
+TH2F *h2_TotFCvsTDC[nieta + 2][niphi + 1][ndepth][nfC];
+TH2F *h2_chgfracTS2vsTDC[nieta + 2][niphi + 1][ndepth][nfC]; //ns
+TH2F *h2_chgfracTS4vsTDC[nieta + 2][niphi + 1][ndepth][nfC]; //ns
 
 //Compile like this
-// g++ -o makeTimingHistsHE makeTimingHistsHE.C  `root-config --cflags --glibs`
-void makeTimingHistsHE(TString inputDir, TString outputTag, int pedestalRun);
+// g++ -o makeTimingHists makeTimingHists.C  `root-config --cflags --glibs`
+void makeTimingHists(TString inputDir, TString subdet, TString outputTag, bool Enable_pedsub = true);
 # ifndef __CINT__  // the following code will be invisible for the interpreter
 int main(int argc, char **argv)
 {
-    if (argc == 4) makeTimingHistsHE(argv[1], argv[2], stoi(argv[3]));
-    else cout << "Please give input directory, tag for output name, and pedestal run number." << endl;
+    if (argc > 3 && (TString(argv[2]) == "HB" | TString(argv[2]) == "HE")) makeTimingHists(argv[1], argv[2], argv[3]);
+    else cout << "Please give input directory, target subdetector(HB/HE), and tag for output name. If necessary, pedestal subtraction could be disabled by the last argument." << endl;
 
 }
 # endif
+
+bool checkSubDet(TString subdet, int ieta, int depth){
+    if (subdet == "HB") return ((abs(ieta) < 16) | ((abs(ieta) == 16) && (depth < 4)));
+    else if (subdet == "HE") return ((abs(ieta) > 16) | ((abs(ieta) == 16) && (depth == 4)));
+    else return false;
+}
+
 
 //Find sum of ADC from max-1 to max+2
 float findTotalADC(vector<int> ADC) {
@@ -111,45 +131,38 @@ float findTotalfC(vector<float> fC_ped_subt) {
 
 }
 
+float findDigiTimefC(vector<float> fC) {
+    int max_idx = distance(fC.begin(), max_element(fC.begin(), fC.end()));
+    //cout<<"Max index is "<<max_idx<<endl;
+    int min = max_idx - 1;
+    int max = max_idx + 2;
+    if (min < 0) min = 0;
+    if (max > 7) max = 7;
 
-void loadPedestals(int pedestalRun) {
-
-    TString pedname = Form("pedestals/ped_%i.txt", pedestalRun);
-    cout << "Using pedestal table " << pedname << endl;
-    std::ifstream pedFile(pedname);
-    std::string pedline;
-   // set<TString> pedchannels;
-  //  set<int> intpedchans;
-    while (getline(pedFile, pedline)) {
-        if (!pedline.length()) continue;
-        std::istringstream iss(pedline);
-        int eta, phi, dep;
-        string det, ID; 
-        float cap1, cap2, cap3, cap4;
-        iss >> eta >> phi >> dep >> det >> cap1 >> cap2 >> cap3 >> cap4 >> ID;
-        //cout << Form("eta %i, phi%i, dep %i, cap1 %.1f, cap2 %.1f, cap3 %.1f, cap4 %.1f", eta, phi, dep, cap1, cap2, cap3, cap4)<< endl;
-        peds[eta - minieta][phi - miniphi][dep - mindepth][0] = cap1;
-        peds[eta - minieta][phi - miniphi][dep - mindepth][1] = cap2;
-        peds[eta - minieta][phi - miniphi][dep - mindepth][2] = cap3;
-        peds[eta - minieta][phi - miniphi][dep - mindepth][3] = cap4;
-        //pedchannels.insert(Form("iEta %i, iPhi %i, Depth %i", eta, phi, dep));
-        //intpedchans.insert(dep + 10 * (phi) + 1000 * (eta));
-
+    float time = 0.;
+    float energy = 0.;
+    for (int i = min; i <= max; i++) {
+        time += (i + 1) * fC.at(i);
+        energy += fC.at(i);
     }
+
+    time = time / energy;
+    time -= 1.;
+    time *= 25.;
+
+    return time;
+
 }
 
-
-void makeTimingHistsHE(TString inputDir, TString outputTag, int pedestalRun) {
+void makeTimingHists(TString inputDir, TString subdet, TString outputTag, bool Enable_pedsub) {
 
     gStyle->SetGridColor(16);
-
-
-    loadPedestals(pedestalRun);
 
     TChain *tree = new TChain("hcalTupleTree/tree");
     tree->Add(inputDir + "/*.root");
 
     int nevents = tree->GetEntries();
+
     int nevents_with_digis = tree->GetEntries("Length$(QIE11DigiIEta)>0");
     cout << Form("Number of events: %i", nevents) << endl;
     cout << Form("Number of events with digis: %i", nevents_with_digis) << endl;
@@ -167,8 +180,6 @@ void makeTimingHistsHE(TString inputDir, TString outputTag, int pedestalRun) {
 
     // QIE11
 
-    //vector<int>   *QIE11DigiSubdet = 0;
-    //tree->SetBranchAddress("QIE11DigiSubdet", &QIE11DigiSubdet);
     vector<int>   *QIE11DigiIEta = 0;
     tree->SetBranchAddress("QIE11DigiIEta", &QIE11DigiIEta);
     vector<int>   *QIE11DigiIPhi = 0;
@@ -177,43 +188,34 @@ void makeTimingHistsHE(TString inputDir, TString outputTag, int pedestalRun) {
     tree->SetBranchAddress("QIE11DigiDepth", &QIE11DigiDepth);
     vector<vector<int> >   *QIE11DigiCapID = 0;
     tree->SetBranchAddress("QIE11DigiCapID", &QIE11DigiCapID);
-    vector<vector<float> >   *QIE11DigiFC = 0;
-    tree->SetBranchAddress("QIE11DigiFC", &QIE11DigiFC);
-    //vector<vector<int> >   *QIE11DigiTDC = 0;
-    //tree->SetBranchAddress("QIE11DigiTDC", &QIE11DigiTDC);
+
     vector<vector<int> >   *QIE11DigiADC = 0;
     tree->SetBranchAddress("QIE11DigiADC", &QIE11DigiADC);
-    //vector<vector<int> >   *QIE11DigiSOI = 0;
-    //tree->SetBranchAddress("QIE11DigiSOI", &QIE11DigiSOI);
 
     vector<float>   *QIE11DigiTimeTDC = 0;
     tree->SetBranchAddress("QIE11DigiTimeTDC", &QIE11DigiTimeTDC);
-    vector<float>   *QIE11DigiTimeFC = 0;
-    tree->SetBranchAddress("QIE11DigiTimeFC", &QIE11DigiTimeFC);
-    vector<float>   *QIE11DigiTotFC = 0;
-    tree->SetBranchAddress("QIE11DigiTotFC", &QIE11DigiTotFC);
 
     vector<int>   *QIE11DigiNTDC = 0;
     tree->SetBranchAddress("QIE11DigiNTDC", &QIE11DigiNTDC);
+
+    vector<vector<float> >   *QIE11DigiFC = 0;
+    vector<float>   *QIE11DigiTimeFC = 0;
+    vector<float>   *QIE11DigiTotFC = 0;
+
+    if (Enable_pedsub){
+      tree->SetBranchAddress("QIE11DigiFCPedSub", &QIE11DigiFC);
+      tree->SetBranchAddress("QIE11DigiTimeFCPedSub", &QIE11DigiTimeFC);
+      tree->SetBranchAddress("QIE11DigiTotFCPedSub", &QIE11DigiTotFC);
+    }else{
+      tree->SetBranchAddress("QIE11DigiFC", &QIE11DigiFC);
+      tree->SetBranchAddress("QIE11DigiTimeFC", &QIE11DigiTimeFC);
+      tree->SetBranchAddress("QIE11DigiTotFC", &QIE11DigiTotFC);
+    }
 
     cout << "Finished loading branches." << endl;
 
     TString outFilename = "hists/hists_" + outputTag + ".root";
     TFile* outFile = new TFile(outFilename, "RECREATE");
-
-    //Pulse shapes
-    TH1F *h1_fC[nieta + 2][niphi + 1][ndepth][nfC]; //Hists to store average fC in each time slice
-    TH1F *h1_ped[nieta + 2][niphi + 1][ndepth][nfC]; //Hists to store average pedestal in each time slice
-    TH1F *h1_energy[nieta + 2][niphi + 1][ndepth][nfC]; //energy distributions (charge distributions)
-    TH1F *h1_energyADC[nieta + 2][niphi + 1][ndepth][nfC]; //energy distributions (charge distributions)
-    TH1F *h1_chg_time[nieta + 2][niphi + 1][ndepth][nfC]; //Filled with charge-weighted average (uses peak finding)
-    TH1F *h1_TDC_time[nieta + 2][niphi + 1][ndepth][nfC]; //in ns
-    TH1F *h1_nTDC[nieta + 2][niphi + 1][ndepth][nfC]; //Number of times TDC fires in one digi
-    TH1F *h1_chgfracTS2[nieta + 2][niphi + 1][ndepth][nfC];
-    TH1F *h1_chgfracTS4[nieta + 2][niphi + 1][ndepth][nfC];
-    TH2F *h2_TotFCvsTDC[nieta + 2][niphi + 1][ndepth][nfC];
-    TH2F *h2_chgfracTS2vsTDC[nieta + 2][niphi + 1][ndepth][nfC]; //ns
-    TH2F *h2_chgfracTS4vsTDC[nieta + 2][niphi + 1][ndepth][nfC]; //ns
 
     /// index nieta: integration over eta, HEM
     /// index nieta+1: integration over eta, HEP
@@ -230,9 +232,6 @@ void makeTimingHistsHE(TString inputDir, TString outputTag, int pedestalRun) {
     cout << "Booking histograms." << endl;
     for (int ieta = 0; ieta < nieta + 2; ieta++)
     {
-        //////// HE only ////////
-        if (ieta >= 14 && ieta <= 44) continue;
-
         for (int iphi = 0; iphi < niphi + 1; iphi++)
         {
 
@@ -312,35 +311,24 @@ void makeTimingHistsHE(TString inputDir, TString outputTag, int pedestalRun) {
     for (int ievent = 0; ievent < nevents; ievent++)
     {
         //if (ievent % 1 == 0) cout << "Processed " << ievent << " events" << endl;
-        if (ievent % 100000 == 0) cout << "Processed " << ievent << " events" << endl;
+        if (ievent % 10000 == 0) cout << "Processed " << ievent << " events" << endl;
         tree->GetEntry(ievent);
-
         //For each event, loop over digis
         for (unsigned int idigi = 0; idigi < QIE11DigiIEta->size(); idigi++) {
+
+            if (!checkSubDet(subdet, QIE11DigiIEta->at(idigi), QIE11DigiDepth->at(idigi))) continue;
+
             //Get indices for histogram vectors
             int ieta =  QIE11DigiIEta->at(idigi) - minieta;
             int iphi =  QIE11DigiIPhi->at(idigi) - miniphi;
             int idepth = QIE11DigiDepth->at(idigi) - mindepth;
 
-
-            vector<float> QIE11DigiFC_ped_subt;
-            //For each digi, loop over all time slices
-            for(unsigned int its = 0; its<QIE11DigiFC->at(idigi).size(); its++){
-              float fC = QIE11DigiFC->at(idigi).at(its);
-              int capid = QIE11DigiCapID->at(idigi).at(its); 
-              float fC_ped_subt = fC - peds[ieta][iphi][idepth][capid];
-              if(peds[ieta][iphi][idepth][capid]== 0) cout<<"Missing pedestal value, eta phi depth: "<<QIE11DigiIEta->at(idigi)<<" "<<QIE11DigiIPhi->at(idigi)<<" "<<QIE11DigiDepth->at(idigi)<<endl;
-              QIE11DigiFC_ped_subt.push_back(fC_ped_subt);
-            }
-
-
-
-            float totFC = findTotalfC(QIE11DigiFC_ped_subt); //= QIE11DigiTotFC->at(idigi);
+            float totFC = QIE11DigiTotFC->at(idigi);
             float timeTDC = QIE11DigiTimeTDC->at(idigi);
             int nTDC = QIE11DigiNTDC->at(idigi);
             float timeFC = QIE11DigiTimeFC->at(idigi);
-            float chgfracTS2 = 100.*QIE11DigiFC_ped_subt.at(2) / totFC;
-            float chgfracTS4 = 100.*QIE11DigiFC_ped_subt.at(4) / totFC;
+            float chgfracTS2 = 100.*QIE11DigiFC->at(idigi).at(2) / totFC;
+            float chgfracTS4 = 100.*QIE11DigiFC->at(idigi).at(4) / totFC;
 
             //Find charge bin
             int ifC = 0;
@@ -362,17 +350,17 @@ void makeTimingHistsHE(TString inputDir, TString outputTag, int pedestalRun) {
                 //Don't subtract pedestal for the pulse shape histogram- instead overlay with measured pedestals as validation
                 int capid = QIE11DigiCapID->at(idigi).at(its); 
                 h1_fC[ieta][iphi][idepth][ifC]->Fill(its, QIE11DigiFC->at(idigi).at(its)); 
-                h1_ped[ieta][iphi][idepth][ifC]->Fill(its, peds[ieta][iphi][idepth][capid]); 
-                
+                h1_ped[ieta][iphi][idepth][ifC]->Fill(its, peds[ieta][iphi][idepth][capid]);
+
             }
 
             //TDC info
             h1_nTDC[ieta][iphi][idepth][ifC]->Fill(nTDC);
             if (nTDC == 1) {
                 h1_TDC_time[ieta][iphi][idepth][ifC]->Fill(timeTDC);
-                h2_chgfracTS2vsTDC[ieta][iphi][idepth][ifC]->Fill(timeTDC, chgfracTS2);
-                h2_chgfracTS4vsTDC[ieta][iphi][idepth][ifC]->Fill(timeTDC, chgfracTS4);
-                h2_TotFCvsTDC[ieta][iphi][idepth][ifC]->Fill(timeTDC, totFC);
+                h2_chgfracTS2vsTDC[ieta][iphi][idepth][ifC]->Fill(timeFC, chgfracTS2);
+                h2_chgfracTS4vsTDC[ieta][iphi][idepth][ifC]->Fill(timeFC, chgfracTS4);
+                h2_TotFCvsTDC[ieta][iphi][idepth][ifC]->Fill(timeFC, totFC);
             }
         }
     }
@@ -381,9 +369,11 @@ void makeTimingHistsHE(TString inputDir, TString outputTag, int pedestalRun) {
 
     //Perform integrations for inclusive fC histograms
     for (int ieta = 0; ieta < nieta; ieta++) {
-        if (ieta >= 14 && ieta <= 44) continue;
         for (int iphi = 0; iphi < niphi; iphi++) {
             for (int idepth = 0; idepth < ndepth; idepth++) {
+
+                if (!checkSubDet(subdet, ieta + minieta, idepth + mindepth)) continue;
+
                 for (int ifC = 1; ifC < nfC; ifC++) {
 
                     //Bin 0 is not filled; reserved for inclusive charge bin
@@ -422,7 +412,6 @@ void makeTimingHistsHE(TString inputDir, TString outputTag, int pedestalRun) {
                     h1_ped[ieta][niphi][idepth][ifC]->Add(h1_ped[ieta][iphi][idepth][ifC]);
                     if (ieta + minieta < 0) h1_ped[nieta][iphi][idepth][ifC]->Add(h1_ped[ieta][iphi][idepth][ifC]);
                     else h1_ped[nieta + 1][iphi][idepth][ifC]->Add(h1_ped[ieta][iphi][idepth][ifC]);
-
                     h1_TDC_time[ieta][niphi][idepth][ifC]->Add(h1_TDC_time[ieta][iphi][idepth][ifC]);
                     if (ieta + minieta < 0) h1_TDC_time[nieta][iphi][idepth][ifC]->Add(h1_TDC_time[ieta][iphi][idepth][ifC]);
                     else h1_TDC_time[nieta + 1][iphi][idepth][ifC]->Add(h1_TDC_time[ieta][iphi][idepth][ifC]);
@@ -460,13 +449,13 @@ void makeTimingHistsHE(TString inputDir, TString outputTag, int pedestalRun) {
     }
 
     for (int ieta = 0; ieta < nieta + 2; ieta++) {
-        if (ieta >= 14 && ieta <= 44) continue;
         for (int iphi = 0; iphi < niphi + 1; iphi++) {
             for (int idepth = 0; idepth < ndepth; idepth++) {
 
+                if (!checkSubDet(subdet, ieta + minieta, idepth + mindepth)) continue;
                 //Save to disk (if non-empty)
                 for (int ifC = 0; ifC < nfC; ifC++) {
-                    if(ifC==1 || ifC==3) continue;
+//                    if(ifC==1 || ifC==3) continue;
                     int nevents_this_chan = h1_energy[ieta][iphi][idepth][ifC]->GetEntries();
                     if (nevents_this_chan > 0) {
                         h1_fC[ieta][iphi][idepth][ifC]->Write();

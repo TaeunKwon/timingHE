@@ -99,6 +99,12 @@ vector<float> rmsTDCs[nfC];
 vector<float> medianTDCs[nfC];
 vector<float> medianErrTDCs[nfC];
 
+vector<float> meanFCs[nfC];
+vector<float> meanErrFCs[nfC];
+vector<float> rmsFCs[nfC];
+vector<float> medianFCs[nfC];
+vector<float> medianErrFCs[nfC];
+
 vector<float> meanTS2s[nfC];
 vector<float> meanErrTS2s[nfC];
 vector<float> meanTS4s[nfC];
@@ -119,6 +125,12 @@ TH2F * h2_meanTS4[nfC][ndepth];
 TH2F * h2_meanE[nfC][ndepth];
 TH2F * h2_correction[nfC][ndepth];
 
+TH2F * h2_meanFC[nfC][ndepth];
+TH2F * h2_rmsFC[nfC][ndepth];
+TH2F * h2_medianFC[nfC][ndepth];
+TH2F * h2_mean_medianFC[nfC][ndepth];
+TH2F * h2_meanErrFC[nfC][ndepth];
+
 //Simple histogram filled with value for each channel
 //ndepth+1 reserved for combination of ALL depths
 TH1F * h1_entries[nfC][ndepth + 1];
@@ -133,6 +145,12 @@ TH1F * h1_meanTS4[nfC][ndepth + 1];
 TH1F * h1_meanE[nfC][ndepth + 1];
 TH1F * h1_correction[nfC][ndepth + 1];
 
+TH1F * h1_meanFC[nfC][ndepth + 1];
+TH1F * h1_rmsFC[nfC][ndepth + 1];
+TH1F * h1_medianFC[nfC][ndepth + 1];
+TH1F * h1_mean_medianFC[nfC][ndepth + 1];
+TH1F * h1_meanErrFC[nfC][ndepth + 1];
+
 //Mean shape vs eta, averaged over all phi, in slices of depth
 TH1F * h1_entries_vs_eta[nfC][ndepth];
 TH1F * h1_meanTDC_vs_eta[nfC][ndepth];
@@ -144,6 +162,12 @@ TH1F * h1_meanErrTDC_vs_eta[nfC][ndepth];
 TH1F * h1_meanTS2_vs_eta[nfC][ndepth];
 TH1F * h1_meanTS4_vs_eta[nfC][ndepth];
 TH1F * h1_meanE_vs_eta[nfC][ndepth];
+
+TH1F * h1_meanFC_vs_eta[nfC][ndepth];
+TH1F * h1_rmsFC_vs_eta[nfC][ndepth];
+TH1F * h1_medianFC_vs_eta[nfC][ndepth];
+TH1F * h1_mean_medianFC_vs_eta[nfC][ndepth];
+TH1F * h1_meanErrFC_vs_eta[nfC][ndepth];
 
 //Mean shape vs phi, averaged over all eta, in slices of depth. Separated for HE- and HE+
 //HEM
@@ -158,6 +182,12 @@ TH1F * h1_meanTS2_vs_phi_HEM[nfC][ndepth];
 TH1F * h1_meanTS4_vs_phi_HEM[nfC][ndepth];
 TH1F * h1_meanE_vs_phi_HEM[nfC][ndepth];
 
+TH1F * h1_meanFC_vs_phi_HEM[nfC][ndepth];
+TH1F * h1_rmsFC_vs_phi_HEM[nfC][ndepth];
+TH1F * h1_medianFC_vs_phi_HEM[nfC][ndepth];
+TH1F * h1_mean_medianFC_vs_phi_HEM[nfC][ndepth];
+TH1F * h1_meanErrFC_vs_phi_HEM[nfC][ndepth];
+
 //HEP
 TH1F * h1_entries_vs_phi_HEP[nfC][ndepth];
 TH1F * h1_meanTDC_vs_phi_HEP[nfC][ndepth];
@@ -170,6 +200,13 @@ TH1F * h1_meanTS2_vs_phi_HEP[nfC][ndepth];
 TH1F * h1_meanTS4_vs_phi_HEP[nfC][ndepth];
 TH1F * h1_meanE_vs_phi_HEP[nfC][ndepth];
 
+TH1F * h1_meanFC_vs_phi_HEP[nfC][ndepth];
+TH1F * h1_rmsFC_vs_phi_HEP[nfC][ndepth];
+TH1F * h1_medianFC_vs_phi_HEP[nfC][ndepth];
+TH1F * h1_mean_medianFC_vs_phi_HEP[nfC][ndepth];
+TH1F * h1_meanErrFC_vs_phi_HEP[nfC][ndepth];
+
+
 float getMedian(TH1F * h) {
     Double_t median;
     Double_t fiftypercent = 0.5;
@@ -177,7 +214,14 @@ float getMedian(TH1F * h) {
     return median;
 }
 
-void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode = 0) {
+bool checkSubDet(TString subdet, int ieta, int depth){
+    if (subdet == "HB") return ((abs(ieta) < 16) | ((abs(ieta) == 16) && (depth < 4)));
+    else if (subdet == "HE") return ((abs(ieta) > 16) | ((abs(ieta) == 16) && (depth == 4)));
+    else return false;
+}
+
+
+void plotDistributions(TString histFile, TString subdet, TString tag, int wedgeSel = 0, int mode = 0) {
 
     /// Wedge sel: do one wedge at a time, for testing or quick checks
 
@@ -203,9 +247,9 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
     for (int ifC = 0; ifC < nfC; ifC++) {
         for (int depth = 0; depth < ndepth + 1; depth++) {
             h1_entries[ifC][depth] = new TH1F(Form("h1_entries_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Log10(Entries);Channels", depth + 1, ifC) , 40, 0, 7);
-            h1_meanTDC[ifC][depth] = new TH1F(Form("h1_meanTDC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Mean TDC time [ns];Channels", depth + 1, ifC) , 32, 72.75, 88.75);
+            h1_meanTDC[ifC][depth] = new TH1F(Form("h1_meanTDC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Mean TDC time [ns];Channels", depth + 1, ifC) , 70, 50, 120);
             h1_rmsTDC[ifC][depth] = new TH1F(Form("h1_rmsTDC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;RMS in TDC time [ns];Channels", depth + 1, ifC) , 40, 0, 12);
-            h1_medianTDC[ifC][depth] = new TH1F(Form("h1_medianTDC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Median TDC time [ns];Channels", depth + 1, ifC) , 32, 72.75, 88.75);
+            h1_medianTDC[ifC][depth] = new TH1F(Form("h1_medianTDC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Median TDC time [ns];Channels", depth + 1, ifC) , 70, 50, 120);
             h1_mean_medianTDC[ifC][depth] = new TH1F(Form("h1_mean_medianTDC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Mean - median TDC time [ns];Channels", depth + 1, ifC) , 30, -4, 4);
             h1_sigma[ifC][depth] = new TH1F(Form("h1_sigma_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i; Pull from 81 ns [sigma];Channels", depth + 1, ifC) , 30, -5, 5);
             h1_meanErrTDC[ifC][depth] = new TH1F(Form("h1_meanErrTDC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Error on mean TDC time [ns];Channels", depth + 1, ifC) , 40, 0, 1.5);
@@ -213,6 +257,12 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
             h1_meanTS4[ifC][depth] = new TH1F(Form("h1_meanTS4_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Mean TS4 fraction [%];Channels", depth + 1, ifC) , 40, 20, 80);
             h1_meanE[ifC][depth] = new TH1F(Form("h1_meanE_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Mean total charge [fC];Channels", depth + 1, ifC) , 40, 5000, 15000);
             h1_correction[ifC][depth] = new TH1F(Form("h1_correction_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Correction to 81 [ns];Channels", depth + 1, ifC) , 40, -15.5, 4.5);
+
+            h1_meanFC[ifC][depth] = new TH1F(Form("h1_meanFC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Mean Charge-averaged time [ns];Channels", depth + 1, ifC) , 70, 50, 120);
+            h1_rmsFC[ifC][depth] = new TH1F(Form("h1_rmsFC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;RMS in Charge-averaged time [ns];Channels", depth + 1, ifC) , 40, 0, 12);
+            h1_medianFC[ifC][depth] = new TH1F(Form("h1_medianFC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Median Charge-averaged time [ns];Channels", depth + 1, ifC) , 70, 50, 120);
+            h1_mean_medianFC[ifC][depth] = new TH1F(Form("h1_mean_medianFC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Mean - median Charge-averaged time [ns];Channels", depth + 1, ifC) , 30, -4, 4);
+            h1_meanErrFC[ifC][depth] = new TH1F(Form("h1_meanErrFC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;Error on mean Charge-averaged time [ns];Channels", depth + 1, ifC) , 40, 0, 1.5);
             if (depth < ndepth) {
                 h2_entries[ifC][depth] = new TH2F(Form("h2_entries_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;iPhi;Entries", depth + 1, ifC) , 59, -29.5, 29.5, 73, 0.5, 73.5);
                 h2_meanTDC[ifC][depth] = new TH2F(Form("h2_meanTDC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;iPhi;Mean TDC time [ns]", depth + 1, ifC) , 59, -29.5, 29.5, 73, 0.5, 73.5);
@@ -226,6 +276,11 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                 h2_meanE[ifC][depth] = new TH2F(Form("h2_meanE_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;iPhi;Mean total charge [fC]", depth + 1, ifC) , 59, -29.5, 29.5, 73, 0.5, 73.5);
                 h2_correction[ifC][depth] = new TH2F(Form("h2_correction_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;iPhi; Correction to 81 [ns];", depth + 1, ifC) , 59, -29.5, 29.5, 73, 0.5, 73.5);
 
+                h2_meanFC[ifC][depth] = new TH2F(Form("h2_meanFC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;iPhi;Mean Charge-averaged time [ns]", depth + 1, ifC) , 59, -29.5, 29.5, 73, 0.5, 73.5);
+                h2_rmsFC[ifC][depth] = new TH2F(Form("h2_rmsFC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;iPhi;RMS in Charge-averaged time [ns]", depth + 1, ifC) , 59, -29.5, 29.5, 73, 0.5, 73.5);
+                h2_medianFC[ifC][depth] = new TH2F(Form("h2_medianFC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;iPhi;Median Charge-averaged time [ns]", depth + 1, ifC) , 59, -29.5, 29.5, 73, 0.5, 73.5);
+                h2_mean_medianFC[ifC][depth] = new TH2F(Form("h2_mean_medianFC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;iPhi;Mean - median Charge-averaged time [ns]", depth + 1, ifC) , 59, -29.5, 29.5, 73, 0.5, 73.5);
+                h2_meanErrFC[ifC][depth] = new TH2F(Form("h2_meanErrFC_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;iPhi;Error on mean Charge-averaged time [ns]", depth + 1, ifC) , 59, -29.5, 29.5, 73, 0.5, 73.5);
 
                 h1_entries_vs_eta[ifC][depth] = new TH1F(Form("h1_entries_vs_eta_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;Entries", depth + 1, ifC) , 59, -29.5, 29.5);
                 h1_meanTDC_vs_eta[ifC][depth] = new TH1F(Form("h1_meanTDC_vs_eta_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;Mean TDC time [ns]", depth + 1, ifC) , 59, -29.5, 29.5);
@@ -238,6 +293,11 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                 h1_meanTS4_vs_eta[ifC][depth] = new TH1F(Form("h1_meanTS4_vs_eta_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;Mean TS4 fraction [%]", depth + 1, ifC) , 59, -29.5, 29.5);
                 h1_meanE_vs_eta[ifC][depth] = new TH1F(Form("h1_meanE_vs_eta_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;Mean total charge [fC]", depth + 1, ifC) , 59, -29.5, 29.5);
 
+                h1_meanFC_vs_eta[ifC][depth] = new TH1F(Form("h1_meanFC_vs_eta_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;Mean Charge-averaged time [ns]", depth + 1, ifC) , 59, -29.5, 29.5);
+                h1_rmsFC_vs_eta[ifC][depth] = new TH1F(Form("h1_rmsFC_vs_eta_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;RMS in Charge-averaged time [ns]", depth + 1, ifC) , 59, -29.5, 29.5);
+                h1_medianFC_vs_eta[ifC][depth] = new TH1F(Form("h1_medianFC_vs_eta_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;Median Charge-averaged time [ns]", depth + 1, ifC) , 59, -29.5, 29.5);
+                h1_mean_medianFC_vs_eta[ifC][depth] = new TH1F(Form("h1_mean_medianFC_vs_eta_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;Mean - median Charge-averaged time [ns]", depth + 1, ifC) , 59, -29.5, 29.5);
+                h1_meanErrFC_vs_eta[ifC][depth] = new TH1F(Form("h1_meanErrFC_vs_eta_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iEta;Error on mean Charge-averaged time [ns]", depth + 1, ifC) , 59, -29.5, 29.5);
 
                 // Use excessive x-axis range to make space for legend
                 h1_entries_vs_phi_HEM[ifC][depth] = new TH1F(Form("h1_entries_vs_phi_HEM_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Entries", depth + 1, ifC) , 96, 0.5, 96.5);
@@ -251,6 +311,13 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                 h1_meanTS4_vs_phi_HEM[ifC][depth] = new TH1F(Form("h1_meanTS4_vs_phi_HEM_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Mean TS4 fraction [%]", depth + 1, ifC) , 96, 0.5, 96.5);
                 h1_meanE_vs_phi_HEM[ifC][depth] = new TH1F(Form("h1_meanE_vs_phi_HEM_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Mean total charge [fC]", depth + 1, ifC) , 96, 0.5, 96.5);
 
+                h1_meanFC_vs_phi_HEM[ifC][depth] = new TH1F(Form("h1_meanFC_vs_phi_HEM_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Mean Charge-averaged time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
+                h1_rmsFC_vs_phi_HEM[ifC][depth] = new TH1F(Form("h1_rmsFC_vs_phi_HEM_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;RMS Charge-averaged time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
+                h1_medianFC_vs_phi_HEM[ifC][depth] = new TH1F(Form("h1_medianFC_vs_phi_HEM_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Median Charge-averaged time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
+                h1_mean_medianFC_vs_phi_HEM[ifC][depth] = new TH1F(Form("h1_mean_medianFC_vs_phi_HEM_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Mean - median Charge-averaged time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
+                h1_meanErrFC_vs_phi_HEM[ifC][depth] = new TH1F(Form("h1_meanErrFC_vs_phi_HEM_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Error on mean Charge-averaged time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
+
+
                 h1_entries_vs_phi_HEP[ifC][depth] = new TH1F(Form("h1_entries_vs_phi_HEP_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Entries", depth + 1, ifC) , 96, 0.5, 96.5);
                 h1_meanTDC_vs_phi_HEP[ifC][depth] = new TH1F(Form("h1_meanTDC_vs_phi_HEP_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Mean TDC time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
                 h1_rmsTDC_vs_phi_HEP[ifC][depth] = new TH1F(Form("h1_rmsTDC_vs_phi_HEP_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;RMS in TDC time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
@@ -261,6 +328,12 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                 h1_meanTS2_vs_phi_HEP[ifC][depth] = new TH1F(Form("h1_meanTS2_vs_phi_HEP_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Mean TS2 fraction [%]", depth + 1, ifC) , 96, 0.5, 96.5);
                 h1_meanTS4_vs_phi_HEP[ifC][depth] = new TH1F(Form("h1_meanTS4_vs_phi_HEP_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Mean TS4 fraction [%]", depth + 1, ifC) , 96, 0.5, 96.5);
                 h1_meanE_vs_phi_HEP[ifC][depth] = new TH1F(Form("h1_meanE_vs_phi_HEP_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Mean total charge [fC]", depth + 1, ifC) , 96, 0.5, 96.5);
+
+                h1_meanFC_vs_phi_HEP[ifC][depth] = new TH1F(Form("h1_meanFC_vs_phi_HEP_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Mean Charge-averaged time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
+                h1_rmsFC_vs_phi_HEP[ifC][depth] = new TH1F(Form("h1_rmsFC_vs_phi_HEP_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;RMS in Charge-averaged time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
+                h1_medianFC_vs_phi_HEP[ifC][depth] = new TH1F(Form("h1_medianFC_vs_phi_HEP_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Median Charge-averaged time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
+                h1_mean_medianFC_vs_phi_HEP[ifC][depth] = new TH1F(Form("h1_mean_medianFC_vs_phi_HEP_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Mean - median Charge-averaged time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
+                h1_meanErrFC_vs_phi_HEP[ifC][depth] = new TH1F(Form("h1_meanErrFC_vs_phi_HEP_fC%i_depth%i", ifC, depth + 1), Form("Depth %i, charge %i;iPhi;Error on mean Charge-averaged time [ns]", depth + 1, ifC) , 96, 0.5, 96.5);
             }
         }
     }
@@ -286,12 +359,11 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                 //Loop over all 
                 for (int ieta = 0; ieta < nieta; ieta++) {
                     int labelEta = ieta + minieta;
-                    if (abs(labelEta) <= 15)continue; //These are not part of HE
 
                     //Prepare pointers to hold histograms for this iEta
                     vector<TH1F*> pulses, peds;
                     vector<TH2F*> chgTS2vsTDC, chgTS4vsTDC, chgvsTDC;
-                    vector< vector<TH1F*> > energy, energyADC, timeTDC, chgTS2, chgTS4;
+                    vector< vector<TH1F*> > energy, energyADC, timeTDC, timeFC, chgTS2, chgTS4;
                     cout << "Eta " << labelEta << endl;
 
                     TString detector = "HEP";
@@ -306,9 +378,8 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                     // Loop over depths
                     for (int depth = 0; depth < ndepth; depth++) {
                         int labelDepth = depth + mindepth;
-                        if (labelDepth == 7 && abs(labelEta) < 26) continue; // skip channels that don't exist to save time.
-                        if (labelDepth == 6 && abs(labelEta) <= 18) continue;
-                        vector<TH1F*> energy_thisdepth, energyADC_thisdepth, timeTDC_thisdepth, chgTS2_thisdepth, chgTS4_thisdepth;
+                        if (!checkSubDet(subdet, labelEta, labelDepth)) continue;
+                        vector<TH1F*> energy_thisdepth, energyADC_thisdepth, timeTDC_thisdepth, timeFC_thisdepth,chgTS2_thisdepth, chgTS4_thisdepth;
                         TH1F* pulses_combined, *peds_combined;
                         TH2F* chgTS2vsTDC_combined, *chgTS4vsTDC_combined, *chgvsTDC_combined;
 
@@ -320,6 +391,7 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                             TH1F * energy_thisphi = (TH1F*)inFile->Get(Form("h1_energy_ieta%i_iphi%i_idepth%i_fC%i", labelEta, labelPhi, labelDepth, ifC));
                             TH1F * energyADC_thisphi = (TH1F*)inFile->Get(Form("h1_energyADC_ieta%i_iphi%i_idepth%i_fC%i", labelEta, labelPhi, labelDepth, ifC));
                             TH1F * timeTDC_thisphi = (TH1F*)inFile->Get(Form("h1_TDC_time_ieta%i_iphi%i_idepth%i_fC%i", labelEta, labelPhi, labelDepth, ifC));
+                            TH1F * timeFC_thisphi = (TH1F*)inFile->Get(Form("h1_chg_time_ieta%i_iphi%i_idepth%i_fC%i", labelEta, labelPhi, labelDepth, ifC));
                             TH1F * chgTS2_thisphi = (TH1F*)inFile->Get(Form("h1_chgfracTS2_ieta%i_iphi%i_idepth%i_fC%i", labelEta, labelPhi, labelDepth, ifC));
                             TH1F * chgTS4_thisphi = (TH1F*)inFile->Get(Form("h1_chgfracTS4_ieta%i_iphi%i_idepth%i_fC%i", labelEta, labelPhi, labelDepth, ifC));
 
@@ -385,6 +457,39 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
 
 
                             }
+
+                            if (timeFC_thisphi) {//if hist is found, 
+                                //store histogram in vector for plotting with appropriate group
+                                timeFC_thisdepth.push_back( timeFC_thisphi );
+                                float thisEntries = timeFC_thisphi->GetEntries();
+                                float thisT = timeFC_thisphi->GetMean();
+                                float thisTerr = timeFC_thisphi->GetMeanError();
+                                float thisRMS = timeFC_thisphi->GetRMS();
+                                float thisMedian = getMedian(timeFC_thisphi);
+
+                                meanFCs[ifC].push_back(thisT);
+                                rmsFCs[ifC].push_back(thisRMS);
+                                meanErrFCs[ifC].push_back(thisTerr);
+                                medianFCs[ifC].push_back(thisMedian);
+                                medianErrFCs[ifC].push_back(timeFC_thisphi->GetBinWidth(1) / sqrt(12)); // use any bin width resolution as uncertainty on median
+
+                                //Set values for 2D histograms
+                                h2_meanFC[ifC][depth]->SetBinContent(labelEta + 30, labelPhi, thisT);
+                                h2_rmsFC[ifC][depth]->SetBinContent(labelEta + 30, labelPhi, thisRMS);
+                                h2_medianFC[ifC][depth]->SetBinContent(labelEta + 30, labelPhi, thisMedian);
+                                h2_mean_medianFC[ifC][depth]->SetBinContent(labelEta + 30, labelPhi, thisT - thisMedian);
+                                h2_meanErrFC[ifC][depth]->SetBinContent(labelEta + 30, labelPhi, thisTerr);
+
+                                //Fill 1D histograms
+                                h1_meanFC[ifC][depth]->Fill( thisT);
+                                h1_rmsFC[ifC][depth]->Fill( thisRMS);
+                                h1_medianFC[ifC][depth]->Fill( thisMedian);
+                                h1_mean_medianFC[ifC][depth]->Fill( thisT - thisMedian);
+                                h1_meanErrFC[ifC][depth]->Fill( thisTerr);
+
+
+                            }
+
                             //Same pattern again
                             if (chgTS2_thisphi) {
                                 chgTS2_thisdepth.push_back( chgTS2_thisphi );
@@ -466,6 +571,7 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                             if (energy_thisdepth.size() > 0) energy.push_back(energy_thisdepth);
                             if (energyADC_thisdepth.size() > 0) energyADC.push_back(energyADC_thisdepth);
                             if (timeTDC_thisdepth.size() > 0) timeTDC.push_back(timeTDC_thisdepth);
+                            if (timeFC_thisdepth.size() > 0) timeFC.push_back(timeFC_thisdepth);
                             if (chgTS2_thisdepth.size() > 0) chgTS2.push_back(chgTS2_thisdepth);
                             if (chgTS4_thisdepth.size() > 0) chgTS4.push_back(chgTS4_thisdepth);
                         }
@@ -479,6 +585,7 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                                 plot_TH2F(chgTS2vsTDC, "chgTS2vsTDC_" + group_name, iWedge);
                                 plot_TH2F(chgTS4vsTDC, "chgTS4vsTDC_" + group_name, iWedge);
                                 plot_vecTH1F(timeTDC, "timeTDC_" + group_name, iWedge);
+                                plot_vecTH1F(timeFC, "timeFC_" + group_name, iWedge);
                                 plot_vecTH1F(chgTS2, "chgTS2_" + group_name, iWedge);
                                 plot_vecTH1F(chgTS4, "chgTS4_" + group_name, iWedge);
                             }
@@ -504,14 +611,14 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
             if (ifC != 2) continue;
             for (int depth = 0; depth < ndepth; depth++) {
                 int labelDepth = depth + mindepth;
-
                 //Loop over eta to fill histograms as function of eta
                 for (int ieta = 0; ieta < nieta; ieta++) {
                     int labelEta = ieta + minieta;
-                    if (abs(labelEta) <= 15) continue;
+                    if (!checkSubDet(subdet, labelEta, labelDepth)) continue;
                     /// iPhi 73 corresponds to histograms that combine all channels in phi
                     TH1F * energy_allphi = (TH1F*)inFile->Get(Form("h1_energy_ieta%i_iphi%i_idepth%i_fC%i", labelEta, 73, labelDepth, ifC));
                     TH1F * timeTDC_allphi = (TH1F*)inFile->Get(Form("h1_TDC_time_ieta%i_iphi%i_idepth%i_fC%i", labelEta, 73, labelDepth, ifC));
+                    TH1F * timeFC_allphi = (TH1F*)inFile->Get(Form("h1_chg_time_ieta%i_iphi%i_idepth%i_fC%i", labelEta, 73, labelDepth, ifC));
                     TH1F * chgTS2_allphi = (TH1F*)inFile->Get(Form("h1_chgfracTS2_ieta%i_iphi%i_idepth%i_fC%i", labelEta, 73, labelDepth, ifC));
                     TH1F * chgTS4_allphi = (TH1F*)inFile->Get(Form("h1_chgfracTS4_ieta%i_iphi%i_idepth%i_fC%i", labelEta, 73, labelDepth, ifC));
 
@@ -527,6 +634,12 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                         float thisMeanErrTS2 = chgTS2_allphi->GetMeanError();
                         float thisMeanTS4 = chgTS4_allphi->GetMean();
                         float thisMeanErrTS4 = chgTS4_allphi->GetMeanError();
+
+                        float thisEntriesFC = timeFC_allphi->GetEntries();
+                        float thisTFC = timeFC_allphi->GetMean();
+                        float thisRMSFC = timeFC_allphi->GetRMS();
+                        float thisTerrFC = timeFC_allphi->GetMeanError();
+                        float thisMedianFC = getMedian(timeFC_allphi);
 
                         h1_meanE_vs_eta[ifC][depth]->SetBinContent(labelEta + 30, thisE);
                         h1_meanE_vs_eta[ifC][depth]->SetBinError(labelEta + 30, thisErrE);
@@ -549,6 +662,15 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                         h1_meanTS4_vs_eta[ifC][depth]->SetBinContent(labelEta + 30, thisMeanTS4);
                         h1_meanTS4_vs_eta[ifC][depth]->SetBinError(labelEta + 30, thisMeanErrTS4);
 
+                        h1_meanFC_vs_eta[ifC][depth]->SetBinContent(labelEta + 30, thisTFC);
+                        h1_meanFC_vs_eta[ifC][depth]->SetBinError(labelEta + 30, thisTerrFC);
+                        h1_rmsFC_vs_eta[ifC][depth]->SetBinContent(labelEta + 30, thisRMSFC);
+                        h1_medianFC_vs_eta[ifC][depth]->SetBinContent(labelEta + 30, thisMedianFC);
+                        h1_medianFC_vs_eta[ifC][depth]->SetBinError(labelEta + 30, timeFC_allphi->GetBinWidth(1) / sqrt(12));
+                        h1_mean_medianFC_vs_eta[ifC][depth]->SetBinContent(labelEta + 30, thisTFC - thisMedianFC);
+                        h1_mean_medianFC_vs_eta[ifC][depth]->SetBinError(labelEta + 30, thisTerrFC);
+                        h1_meanErrFC_vs_eta[ifC][depth]->SetBinContent(labelEta + 30, thisTerrFC);
+
                     }
                 }
                 //loop over phi to fill hists as function of phi
@@ -557,12 +679,14 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                     //Eta = 30 corresponds to histograms combined in eta for all eta in HEM 
                     TH1F * energy_alletaHEM = (TH1F*)inFile->Get(Form("h1_energy_ieta%i_iphi%i_idepth%i_fC%i", 30, labelPhi, labelDepth, ifC));
                     TH1F * timeTDC_alletaHEM = (TH1F*)inFile->Get(Form("h1_TDC_time_ieta%i_iphi%i_idepth%i_fC%i", 30, labelPhi, labelDepth, ifC));
+                    TH1F * timeFC_alletaHEM = (TH1F*)inFile->Get(Form("h1_chg_time_ieta%i_iphi%i_idepth%i_fC%i", 30, labelPhi, labelDepth, ifC));
                     TH1F * chgTS2_alletaHEM = (TH1F*)inFile->Get(Form("h1_chgfracTS2_ieta%i_iphi%i_idepth%i_fC%i", 30, labelPhi, labelDepth, ifC));
                     TH1F * chgTS4_alletaHEM = (TH1F*)inFile->Get(Form("h1_chgfracTS4_ieta%i_iphi%i_idepth%i_fC%i", 30, labelPhi, labelDepth, ifC));
 
-                    //Eta = 30 corresponds to histograms combined in eta for all eta in HEP
+                    //Eta = 31 corresponds to histograms combined in eta for all eta in HEP
                     TH1F * energy_alletaHEP = (TH1F*)inFile->Get(Form("h1_energy_ieta%i_iphi%i_idepth%i_fC%i", 31, labelPhi, labelDepth, ifC));
                     TH1F * timeTDC_alletaHEP = (TH1F*)inFile->Get(Form("h1_TDC_time_ieta%i_iphi%i_idepth%i_fC%i", 31, labelPhi, labelDepth, ifC));
+                    TH1F * timeFC_alletaHEP = (TH1F*)inFile->Get(Form("h1_chg_time_ieta%i_iphi%i_idepth%i_fC%i", 31, labelPhi, labelDepth, ifC));
                     TH1F * chgTS2_alletaHEP = (TH1F*)inFile->Get(Form("h1_chgfracTS2_ieta%i_iphi%i_idepth%i_fC%i", 31, labelPhi, labelDepth, ifC));
                     TH1F * chgTS4_alletaHEP = (TH1F*)inFile->Get(Form("h1_chgfracTS4_ieta%i_iphi%i_idepth%i_fC%i", 31, labelPhi, labelDepth, ifC));
 
@@ -580,6 +704,12 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                         float thisMeanTS4 = chgTS4_alletaHEM->GetMean();
                         float thisMeanErrTS4 = chgTS4_alletaHEM->GetMeanError();
 
+                        float thisEntriesFC = timeFC_alletaHEM->GetEntries();
+                        float thisTFC = timeFC_alletaHEM->GetMean();
+                        float thisRMSFC = timeFC_alletaHEM->GetRMS();
+                        float thisTerrFC = timeFC_alletaHEM->GetMeanError();
+                        float thisMedianFC = getMedian(timeFC_alletaHEM);
+
                         h1_meanE_vs_phi_HEM[ifC][depth]->SetBinContent(labelPhi, thisE);
                         h1_meanE_vs_phi_HEM[ifC][depth]->SetBinError(labelPhi, thisErrE);
 
@@ -594,6 +724,16 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                         h1_mean_medianTDC_vs_phi_HEM[ifC][depth]->SetBinError(labelPhi, thisTerr);
                         h1_meanErrTDC_vs_phi_HEM[ifC][depth]->SetBinContent(labelPhi, thisTerr);
                         h1_sigma_vs_phi_HEM[ifC][depth]->SetBinContent(labelPhi, (81. - thisT) / thisTerr);
+
+                        h1_meanFC_vs_phi_HEM[ifC][depth]->SetBinContent(labelPhi, thisTFC);
+                        h1_meanFC_vs_phi_HEM[ifC][depth]->SetBinError(labelPhi, thisTerrFC);
+                        h1_rmsFC_vs_phi_HEM[ifC][depth]->SetBinContent(labelPhi, thisRMSFC);
+                        h1_medianFC_vs_phi_HEM[ifC][depth]->SetBinContent(labelPhi, thisMedianFC);
+                        h1_medianFC_vs_phi_HEM[ifC][depth]->SetBinError(labelPhi, timeFC_alletaHEM->GetBinWidth(1) / sqrt(12));
+                        h1_mean_medianFC_vs_phi_HEM[ifC][depth]->SetBinContent(labelPhi, thisTFC - thisMedianFC);
+                        h1_mean_medianFC_vs_phi_HEM[ifC][depth]->SetBinError(labelPhi, thisTerrFC);
+                        h1_meanErrFC_vs_phi_HEM[ifC][depth]->SetBinContent(labelPhi, thisTerrFC);
+
 
                         h1_meanTS2_vs_phi_HEM[ifC][depth]->SetBinContent(labelPhi, thisMeanTS2);
                         h1_meanTS2_vs_phi_HEM[ifC][depth]->SetBinError(labelPhi, thisMeanErrTS2);
@@ -610,10 +750,18 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                         float thisRMS = timeTDC_alletaHEP->GetRMS();
                         float thisTerr = timeTDC_alletaHEP->GetMeanError();
                         float thisMedian = getMedian(timeTDC_alletaHEP);
+
                         float thisMeanTS2 = chgTS2_alletaHEP->GetMean();
                         float thisMeanErrTS2 = chgTS2_alletaHEP->GetMeanError();
                         float thisMeanTS4 = chgTS4_alletaHEP->GetMean();
                         float thisMeanErrTS4 = chgTS4_alletaHEP->GetMeanError();
+
+                        float thisEntriesFC = timeFC_alletaHEP->GetEntries();
+                        float thisTFC = timeFC_alletaHEP->GetMean();
+                        float thisRMSFC = timeFC_alletaHEP->GetRMS();
+                        float thisTerrFC = timeFC_alletaHEP->GetMeanError();
+                        float thisMedianFC = getMedian(timeFC_alletaHEP);
+
                         h1_meanE_vs_phi_HEP[ifC][depth]->SetBinContent(labelPhi, thisE);
                         h1_meanE_vs_phi_HEP[ifC][depth]->SetBinError(labelPhi, thisErrE);
 
@@ -628,6 +776,15 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                         h1_mean_medianTDC_vs_phi_HEP[ifC][depth]->SetBinError(labelPhi, thisTerr);
                         h1_meanErrTDC_vs_phi_HEP[ifC][depth]->SetBinContent(labelPhi, thisTerr);
                         h1_sigma_vs_phi_HEP[ifC][depth]->SetBinContent(labelPhi, (81. - thisT) / thisTerr);
+
+                        h1_meanFC_vs_phi_HEP[ifC][depth]->SetBinContent(labelPhi, thisTFC);
+                        h1_meanFC_vs_phi_HEP[ifC][depth]->SetBinError(labelPhi, thisTerrFC);
+                        h1_rmsFC_vs_phi_HEP[ifC][depth]->SetBinContent(labelPhi, thisRMSFC);
+                        h1_medianFC_vs_phi_HEP[ifC][depth]->SetBinContent(labelPhi, thisMedianFC);
+                        h1_medianFC_vs_phi_HEP[ifC][depth]->SetBinError(labelPhi, timeFC_alletaHEP->GetBinWidth(1) / sqrt(12));
+                        h1_mean_medianFC_vs_phi_HEP[ifC][depth]->SetBinContent(labelPhi, thisTFC - thisMedianFC);
+                        h1_mean_medianFC_vs_phi_HEP[ifC][depth]->SetBinError(labelPhi, thisTerrFC);
+                        h1_meanErrFC_vs_phi_HEP[ifC][depth]->SetBinContent(labelPhi, thisTerrFC);
 
                         h1_meanTS2_vs_phi_HEP[ifC][depth]->SetBinContent(labelPhi, thisMeanTS2);
                         h1_meanTS2_vs_phi_HEP[ifC][depth]->SetBinError(labelPhi, thisMeanErrTS2);
@@ -650,10 +807,14 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
             printSummaryScatter(TGraphErrors(meanTDCs[ifC].size(), meanTDCs[ifC].data(), meanTS2s[ifC].data(), meanErrTDCs[ifC].data(), meanErrTS2s[ifC].data()), Form("TS2frac_vs_meanT_fC%i", ifC), "Mean TDC time [ns]", "Mean TS2 charge fraction [%]");
             printSummaryScatter(TGraphErrors(meanTDCs[ifC].size(), meanTDCs[ifC].data(), meanTS4s[ifC].data(), meanErrTDCs[ifC].data(), meanErrTS4s[ifC].data()), Form("TS4frac_vs_meanT_fC%i", ifC), "Mean TDC time [ns]", "Mean TS4 charge fraction [%]");
             printSummaryScatter(TGraphErrors(meanTDCs[ifC].size(), meanTDCs[ifC].data(), medianTDCs[ifC].data(), meanErrTDCs[ifC].data(), medianErrTDCs[ifC].data()), Form("medianT_vs_meanT_fC%i", ifC), "Mean TDC time [ns]", "Median TDC time [ns]");
+
+            printSummaryScatter(TGraphErrors(meanFCs[ifC].size(), meanFCs[ifC].data(), meanTS2s[ifC].data(), meanErrFCs[ifC].data(), meanErrTS2s[ifC].data()), Form("TS2frac_vs_meanT_fC%i", ifC), "Mean Charge-averaged time [ns]", "Mean TS2 charge fraction [%]");
+            printSummaryScatter(TGraphErrors(meanFCs[ifC].size(), meanFCs[ifC].data(), meanTS4s[ifC].data(), meanErrFCs[ifC].data(), meanErrTS4s[ifC].data()), Form("TS4frac_vs_meanT_fC%i", ifC), "Mean Charge-averaged time [ns]", "Mean TS4 charge fraction [%]");
+            printSummaryScatter(TGraphErrors(meanFCs[ifC].size(), meanFCs[ifC].data(), medianFCs[ifC].data(), meanErrFCs[ifC].data(), medianErrFCs[ifC].data()), Form("medianT_vs_meanT_fC%i", ifC), "Mean Charge-averaged time [ns]", "Median FC time [ns]");
         }
-        vector<TH1F*> vh1_meanTDC_vs_eta, vh1_meanTS2_vs_eta, vh1_meanTS4_vs_eta, vh1_rmsTDC_vs_eta, vh1_meanE_vs_eta ;
-        vector<TH1F*> vh1_meanTDC_vs_phi_HEM, vh1_meanTS2_vs_phi_HEM, vh1_meanTS4_vs_phi_HEM, vh1_rmsTDC_vs_phi_HEM, vh1_meanE_vs_phi_HEM;
-        vector<TH1F*> vh1_meanTDC_vs_phi_HEP, vh1_meanTS2_vs_phi_HEP, vh1_meanTS4_vs_phi_HEP, vh1_rmsTDC_vs_phi_HEP, vh1_meanE_vs_phi_HEP;
+        vector<TH1F*> vh1_meanTDC_vs_eta, vh1_meanTS2_vs_eta, vh1_meanTS4_vs_eta, vh1_rmsTDC_vs_eta, vh1_meanE_vs_eta, vh1_meanFC_vs_eta, vh1_rmsFC_vs_eta;
+        vector<TH1F*> vh1_meanTDC_vs_phi_HEM, vh1_meanTS2_vs_phi_HEM, vh1_meanTS4_vs_phi_HEM, vh1_rmsTDC_vs_phi_HEM, vh1_meanE_vs_phi_HEM, vh1_meanFC_vs_phi_HEM, vh1_rmsFC_vs_phi_HEM;
+        vector<TH1F*> vh1_meanTDC_vs_phi_HEP, vh1_meanTS2_vs_phi_HEP, vh1_meanTS4_vs_phi_HEP, vh1_rmsTDC_vs_phi_HEP, vh1_meanE_vs_phi_HEP, vh1_meanFC_vs_phi_HEP, vh1_rmsFC_vs_phi_HEP;
         for (int idepth = 0; idepth < ndepth; idepth++) {
             //if (idepth != 0) continue;
             if (mode == 0 || mode == 1) {
@@ -663,6 +824,13 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                 printSummaryTH2(h2_meanErrTDC[ifC][idepth], Form("meanErrTDC_idepth%i_fC%i", idepth + 1, ifC));
                 printSummaryTH2(h2_medianTDC[ifC][idepth], Form("medianTDC_idepth%i_fC%i", idepth + 1, ifC));
                 printSummaryTH2(h2_mean_medianTDC[ifC][idepth], Form("mean_medianTDC_idepth%i_fC%i", idepth + 1, ifC));
+
+                printSummaryTH2(h2_meanFC[ifC][idepth], Form("meanFC_idepth%i_fC%i", idepth + 1, ifC));
+                printSummaryTH2(h2_rmsFC[ifC][idepth], Form("rmsFC_idepth%i_fC%i", idepth + 1, ifC));
+                printSummaryTH2(h2_meanErrFC[ifC][idepth], Form("meanErrFC_idepth%i_fC%i", idepth + 1, ifC));
+                printSummaryTH2(h2_medianFC[ifC][idepth], Form("medianFC_idepth%i_fC%i", idepth + 1, ifC));
+                printSummaryTH2(h2_mean_medianFC[ifC][idepth], Form("mean_medianFC_idepth%i_fC%i", idepth + 1, ifC));
+
                 printSummaryTH2(h2_entries[ifC][idepth], Form("entries_idepth%i_fC%i", idepth + 1, ifC));
                 printSummaryTH2(h2_meanTS2[ifC][idepth], Form("meanTS2_idepth%i_fC%i", idepth + 1, ifC));
                 printSummaryTH2(h2_meanTS4[ifC][idepth], Form("meanTS4_idepth%i_fC%i", idepth + 1, ifC));
@@ -675,6 +843,13 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                 printSimpleTH1F(h1_meanErrTDC[ifC][idepth], Form("meanErrTDC_idepth%i_fC%i", idepth + 1, ifC));
                 printSimpleTH1F(h1_medianTDC[ifC][idepth], Form("medianTDC_idepth%i_fC%i", idepth + 1, ifC));
                 printSimpleTH1F(h1_mean_medianTDC[ifC][idepth], Form("mean_medianTDC_idepth%i_fC%i", idepth + 1, ifC));
+
+                printSimpleTH1F(h1_meanFC[ifC][idepth], Form("meanFC_idepth%i_fC%i", idepth + 1, ifC));
+                printSimpleTH1F(h1_rmsFC[ifC][idepth], Form("rmsFC_idepth%i_fC%i", idepth + 1, ifC));
+                printSimpleTH1F(h1_meanErrFC[ifC][idepth], Form("meanErrFC_idepth%i_fC%i", idepth + 1, ifC));
+                printSimpleTH1F(h1_medianFC[ifC][idepth], Form("medianFC_idepth%i_fC%i", idepth + 1, ifC));
+                printSimpleTH1F(h1_mean_medianFC[ifC][idepth], Form("mean_medianFC_idepth%i_fC%i", idepth + 1, ifC));
+
                 printSimpleTH1F(h1_entries[ifC][idepth], Form("entries_idepth%i_fC%i", idepth + 1, ifC));
                 printSimpleTH1F(h1_meanTS2[ifC][idepth], Form("meanTS2_idepth%i_fC%i", idepth + 1, ifC));
                 printSimpleTH1F(h1_meanTS4[ifC][idepth], Form("meanTS4_idepth%i_fC%i", idepth + 1, ifC));
@@ -686,6 +861,13 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
                 h1_meanErrTDC[ifC][ndepth]->Add(h1_meanErrTDC[ifC][idepth]);
                 h1_medianTDC[ifC][ndepth]->Add(h1_medianTDC[ifC][idepth]);
                 h1_mean_medianTDC[ifC][ndepth]->Add(h1_mean_medianTDC[ifC][idepth]);
+
+                h1_meanFC[ifC][ndepth]->Add( h1_meanFC[ifC][idepth]);
+                h1_rmsFC[ifC][ndepth]->Add( h1_rmsFC[ifC][idepth]);
+                h1_meanErrFC[ifC][ndepth]->Add(h1_meanErrFC[ifC][idepth]);
+                h1_medianFC[ifC][ndepth]->Add(h1_medianFC[ifC][idepth]);
+                h1_mean_medianFC[ifC][ndepth]->Add(h1_mean_medianFC[ifC][idepth]);
+
                 h1_entries[ifC][ndepth]->Add(h1_entries[ifC][idepth]);
                 h1_meanTS2[ifC][ndepth]->Add(h1_meanTS2[ifC][idepth]);
                 h1_meanTS4[ifC][ndepth]->Add(h1_meanTS4[ifC][idepth]);
@@ -696,12 +878,20 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
             //Prepare vector of 1D summary plots vs eta or phi to overlap different depths on one canvas
             vh1_meanTDC_vs_eta.push_back(h1_meanTDC_vs_eta[ifC][idepth]);
             vh1_rmsTDC_vs_eta.push_back(h1_rmsTDC_vs_eta[ifC][idepth]);
+
+            vh1_meanFC_vs_eta.push_back(h1_meanFC_vs_eta[ifC][idepth]);
+            vh1_rmsFC_vs_eta.push_back(h1_rmsFC_vs_eta[ifC][idepth]);
+
             vh1_meanTS2_vs_eta.push_back(h1_meanTS2_vs_eta[ifC][idepth]);
             vh1_meanTS4_vs_eta.push_back(h1_meanTS4_vs_eta[ifC][idepth]);
             vh1_meanE_vs_eta.push_back(h1_meanE_vs_eta[0][idepth]);
 
             vh1_meanTDC_vs_phi_HEM.push_back(h1_meanTDC_vs_phi_HEM[ifC][idepth]);
             vh1_rmsTDC_vs_phi_HEM.push_back(h1_rmsTDC_vs_phi_HEM[ifC][idepth]);
+
+            vh1_meanFC_vs_phi_HEM.push_back(h1_meanFC_vs_phi_HEM[ifC][idepth]);
+            vh1_rmsFC_vs_phi_HEM.push_back(h1_rmsFC_vs_phi_HEM[ifC][idepth]);
+
             vh1_meanTS2_vs_phi_HEM.push_back(h1_meanTS2_vs_phi_HEM[ifC][idepth]);
             vh1_meanTS4_vs_phi_HEM.push_back(h1_meanTS4_vs_phi_HEM[ifC][idepth]);
             vh1_meanE_vs_phi_HEM.push_back(h1_meanE_vs_phi_HEM[0][idepth]);
@@ -709,6 +899,10 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
 
             vh1_meanTDC_vs_phi_HEP.push_back(h1_meanTDC_vs_phi_HEP[ifC][idepth]);
             vh1_rmsTDC_vs_phi_HEP.push_back(h1_rmsTDC_vs_phi_HEP[ifC][idepth]);
+
+            vh1_meanFC_vs_phi_HEP.push_back(h1_meanFC_vs_phi_HEP[ifC][idepth]);
+            vh1_rmsFC_vs_phi_HEP.push_back(h1_rmsFC_vs_phi_HEP[ifC][idepth]);
+
             vh1_meanTS2_vs_phi_HEP.push_back(h1_meanTS2_vs_phi_HEP[ifC][idepth]);
             vh1_meanTS4_vs_phi_HEP.push_back(h1_meanTS4_vs_phi_HEP[ifC][idepth]);
             vh1_meanE_vs_phi_HEP.push_back(h1_meanE_vs_phi_HEP[0][idepth]);
@@ -717,12 +911,19 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
         if (mode == 0 || mode == 2) {
 
             //summary plots vs eta, for depth 1-3
-            printSummaryTH1vec(vh1_meanTDC_vs_eta, Form("meanTDC_vs_eta_fC%i", ifC), 78, 84);
+            printSummaryTH1vec(vh1_meanTDC_vs_eta, Form("meanTDC_vs_eta_fC%i", ifC), 50, 120);
             vector<TH1F*> vh1_meanTDC_vs_eta_depth123;
             vh1_meanTDC_vs_eta_depth123.push_back(vh1_meanTDC_vs_eta[0]);
             vh1_meanTDC_vs_eta_depth123.push_back(vh1_meanTDC_vs_eta[1]);
             vh1_meanTDC_vs_eta_depth123.push_back(vh1_meanTDC_vs_eta[2]);
-            printSummaryTH1vec(vh1_meanTDC_vs_eta_depth123, Form("meanTDC_vs_eta_depth123_fC%i", ifC), 78, 84);
+            printSummaryTH1vec(vh1_meanTDC_vs_eta_depth123, Form("meanTDC_vs_eta_depth123_fC%i", ifC), 50, 120);
+
+            printSummaryTH1vec(vh1_meanFC_vs_eta, Form("meanFC_vs_eta_fC%i", ifC), 50, 120);
+            vector<TH1F*> vh1_meanFC_vs_eta_depth123;
+            vh1_meanFC_vs_eta_depth123.push_back(vh1_meanFC_vs_eta[0]);
+            vh1_meanFC_vs_eta_depth123.push_back(vh1_meanFC_vs_eta[1]);
+            vh1_meanFC_vs_eta_depth123.push_back(vh1_meanFC_vs_eta[2]);
+            printSummaryTH1vec(vh1_meanFC_vs_eta_depth123, Form("meanFC_vs_eta_depth123_fC%i", ifC), 50, 120);
 
             //summary plots vs eta, for depth 4-7
             vector<TH1F*> vh1_meanTDC_vs_eta_depth4567;
@@ -730,24 +931,38 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
             vh1_meanTDC_vs_eta_depth4567.push_back(vh1_meanTDC_vs_eta[4]);
             vh1_meanTDC_vs_eta_depth4567.push_back(vh1_meanTDC_vs_eta[5]);
             vh1_meanTDC_vs_eta_depth4567.push_back(vh1_meanTDC_vs_eta[6]);
-            printSummaryTH1vec(vh1_meanTDC_vs_eta_depth4567, Form("meanTDC_vs_eta_depth4567_fC%i", ifC), 78, 84);
+            printSummaryTH1vec(vh1_meanTDC_vs_eta_depth4567, Form("meanTDC_vs_eta_depth4567_fC%i", ifC), 50, 120);
+
+            vector<TH1F*> vh1_meanFC_vs_eta_depth4567;
+            vh1_meanFC_vs_eta_depth4567.push_back(vh1_meanFC_vs_eta[3]);
+            vh1_meanFC_vs_eta_depth4567.push_back(vh1_meanFC_vs_eta[4]);
+            vh1_meanFC_vs_eta_depth4567.push_back(vh1_meanFC_vs_eta[5]);
+            vh1_meanFC_vs_eta_depth4567.push_back(vh1_meanFC_vs_eta[6]);
+            printSummaryTH1vec(vh1_meanFC_vs_eta_depth4567, Form("meanFC_vs_eta_depth4567_fC%i", ifC), 50, 120);
 
             printSummaryTH1vec(vh1_rmsTDC_vs_eta, Form("rmsTDC_vs_eta_fC%i", ifC), 0, 3);
+            printSummaryTH1vec(vh1_rmsFC_vs_eta, Form("rmsFC_vs_eta_fC%i", ifC), 0, 3);
+
             printSummaryTH1vec(vh1_meanTS2_vs_eta, Form("meanTS2_vs_eta_fC%i", ifC), 0, 2);
             printSummaryTH1vec(vh1_meanTS2_vs_eta, Form("meanTS2_vs_eta_fC%i", ifC), 0.001, 3, true);
             printSummaryTH1vec(vh1_meanTS4_vs_eta, Form("meanTS4_vs_eta_fC%i", ifC), 0, 55);
             printSummaryTH1vec(vh1_meanE_vs_eta, Form("meanE_vs_eta_fC%i", 0), 5000, 15000);
 
             //Summary vs phi, for HEM and HEP separately
-            printSummaryTH1vec(vh1_meanTDC_vs_phi_HEM, Form("meanTDC_vs_phi_HEM_fC%i", ifC), 75, 87);
+            printSummaryTH1vec(vh1_meanTDC_vs_phi_HEM, Form("meanTDC_vs_phi_HEM_fC%i", ifC), 50, 120);
             printSummaryTH1vec(vh1_rmsTDC_vs_phi_HEM, Form("rmsTDC_vs_phi_HEM_fC%i", ifC), 0, 3);
+            printSummaryTH1vec(vh1_meanFC_vs_phi_HEM, Form("meanFC_vs_phi_HEM_fC%i", ifC), 50, 120);
+            printSummaryTH1vec(vh1_rmsFC_vs_phi_HEM, Form("rmsFC_vs_phi_HEM_fC%i", ifC), 0, 3);
+
             printSummaryTH1vec(vh1_meanTS2_vs_phi_HEM, Form("meanTS2_vs_phi_HEM_fC%i", ifC), 0, 2);
             printSummaryTH1vec(vh1_meanTS2_vs_phi_HEM, Form("meanTS2_vs_phi_HEM_fC%i", ifC), 0.001, 3, true);
             printSummaryTH1vec(vh1_meanTS4_vs_phi_HEM, Form("meanTS4_vs_phi_HEM_fC%i", ifC), 0, 55);
             printSummaryTH1vec(vh1_meanE_vs_phi_HEM, Form("meanE_vs_phi_HEM_fC%i", 0), 5000, 15000);
 
-            printSummaryTH1vec(vh1_meanTDC_vs_phi_HEP, Form("meanTDC_vs_phi_HEP_fC%i", ifC), 75, 87);
+            printSummaryTH1vec(vh1_meanTDC_vs_phi_HEP, Form("meanTDC_vs_phi_HEP_fC%i", ifC), 50, 120);
             printSummaryTH1vec(vh1_rmsTDC_vs_phi_HEP, Form("rmsTDC_vs_phi_HEP_fC%i", ifC), 0, 3);
+            printSummaryTH1vec(vh1_meanFC_vs_phi_HEP, Form("meanFC_vs_phi_HEP_fC%i", ifC), 50, 120);
+            printSummaryTH1vec(vh1_rmsFC_vs_phi_HEP, Form("rmsFC_vs_phi_HEP_fC%i", ifC), 0, 3);
             printSummaryTH1vec(vh1_meanTS2_vs_phi_HEP, Form("meanTS2_vs_phi_HEP_fC%i", ifC), 0, 2);
             printSummaryTH1vec(vh1_meanTS2_vs_phi_HEP, Form("meanTS2_vs_phi_HEP_fC%i", ifC), 0.001, 3, true);
             printSummaryTH1vec(vh1_meanTS4_vs_phi_HEP, Form("meanTS4_vs_phi_HEP_fC%i", ifC), 0, 55);
@@ -762,6 +977,13 @@ void plotDistributions(TString histFile, TString tag, int wedgeSel = 0, int mode
             printSimpleTH1F(h1_meanErrTDC[ifC][ndepth], Form("meanErrTDC_fC%i", ifC));
             printSimpleTH1F(h1_medianTDC[ifC][ndepth], Form("medianTDC_fC%i", ifC));
             printSimpleTH1F(h1_mean_medianTDC[ifC][ndepth], Form("mean_medianTDC_fC%i", ifC));
+
+            printSimpleTH1F(h1_meanFC[ifC][ndepth], Form("meanFC_fC%i", ifC));
+            printSimpleTH1F(h1_rmsFC[ifC][ndepth], Form("rmsFC_fC%i", ifC));
+            printSimpleTH1F(h1_meanErrFC[ifC][ndepth], Form("meanErrFC_fC%i", ifC));
+            printSimpleTH1F(h1_medianFC[ifC][ndepth], Form("medianFC_fC%i", ifC));
+            printSimpleTH1F(h1_mean_medianFC[ifC][ndepth], Form("mean_medianFC_fC%i", ifC));
+
             printSimpleTH1F(h1_entries[ifC][ndepth], Form("entries_fC%i", ifC));
             printSimpleTH1F(h1_meanTS2[ifC][ndepth], Form("meanTS2_fC%i", ifC));
             printSimpleTH1F(h1_meanTS4[ifC][ndepth], Form("meanTS4_fC%i", ifC));
@@ -778,7 +1000,7 @@ void writeCorrectionTable(TString name, int ifC) {
     ofstream fout(name.Data(), ios_base::app | ios_base::out);
     if (fout.is_open())
     {
-        fout << "nDigis,iEta,iPhi,Depth,Mean TDC time[ns], TDC time RMS[ns], Uncertainty,Adjustment[ns],Adjustment[phase units]\n";
+        fout << "nDigis,iEta,iPhi,Depth,Mean Charge-averaged time[ns], TDC time RMS[ns], Uncertainty,Adjustment[ns],Adjustment[phase units]\n";
         for (int ichan = 0; ichan < etas[ifC].size(); ichan++) {
 
             int adjustment = 0;
@@ -798,7 +1020,7 @@ void printSummaryScatter(TGraphErrors g, TString name, TString xlabel, TString y
     //g.SetTitle("Run "+run)
     g.GetXaxis()->SetTitle(xlabel);
     g.GetYaxis()->SetTitle(ylabel);
-    //g.GetYaxis()->SetTitleOffset(1.1);
+    g.GetYaxis()->SetTitleOffset(1.15);
     g.GetXaxis()->SetTitleOffset(1.1);
     g.SetLineWidth(0.5);
     //g.SetTitleSize(0.07);
@@ -832,7 +1054,7 @@ void printSimpleTH1F(TH1F * h, TString name) {
     h1cosmetic(h);
 
     h->Draw("hist");
-
+    h->SetTitleOffset(1.1,"y");
     c.Print(summaryDir + "h1_" + name + ".pdf");
     c.Print(webplotDir + "summary/h1_" + name + ".png");
     c.SetLogy();
@@ -858,7 +1080,7 @@ void printSummaryTH2(TH2F * h2, TString name, float min, float max) {
     h2->SetTitleOffset(0.8, "y");
     h2->SetTitleOffset(0.82, "z");
     //   h2->SetTitleOffset(1.03,"z");
-    //   h2->SetTitleOffset(0.9,"y");
+    //h2->SetTitleOffset(0.9,"y");
     //   h2->SetTitleOffset(0.9,"x");
     //   h2->GetXaxis()->SetTitleSize(0.05);
     //   h2->GetYaxis()->SetTitleSize(0.05);
@@ -914,6 +1136,7 @@ void printSummaryTH1vec(vector<TH1F*> h1, TString name, float minn, float maxx, 
         h1cosmetic(h1[idep]);
         h1[idep]->SetLineColor(colors[idep]);
         h1[idep]->SetLineWidth(2);
+        h1[idep]->GetYaxis()->SetTitleOffset(1.15);
 
         if (maxx == 0) {
             h1[idep]->SetMinimum(min);
@@ -1323,9 +1546,9 @@ string getPhi(TString title) {
 # ifndef __CINT__  // the following code will be invisible for the interpreter
 int main(int argc, char **argv)
 {
-    if (argc == 3) plotDistributions(argv[1], argv[2]);
-    else if (argc == 4) plotDistributions(argv[1], argv[2], stoi(argv[3]));
-    else if (argc == 5) plotDistributions(argv[1], argv[2], stoi(argv[3]), stoi(argv[4]));
+    if (argc == 4) plotDistributions(argv[1], argv[2], argv[3]);
+    else if (argc == 5) plotDistributions(argv[1], argv[2], argv[3], stoi(argv[3]));
+    else if (argc == 6) plotDistributions(argv[1], argv[2], argv[3], stoi(argv[3]), stoi(argv[4]));
     else cout << "Please give input histogram root file, and dataset tag for output name." << endl;
 
 }
